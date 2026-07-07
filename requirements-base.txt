@@ -1,0 +1,22 @@
+# Shared deps for both mac and cuda targets.
+# Versions are floors; Phase 2 will freeze exact versions into a lockfile
+# after a clean install succeeds on this machine.
+
+# Orchestration + transport
+pipecat-ai[silero,webrtc,openai]>=0.0.60
+aiortc>=1.9.0
+
+# HTTP shim (OpenAI-compat endpoints)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# Config / utils
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-dotenv>=1.0.1
+loguru>=0.7.2
+numpy>=1.26.0
+
+# TTS
+kokoro-onnx>=0.4.0

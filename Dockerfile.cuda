@@ -1,0 +1,45 @@
+# Production image for the NVIDIA (CUDA 12+, Blackwell-capable) stack.
+# vLLM runs as a SEPARATE container (see docker-compose.cuda.yml). This image is
+# STT (faster-whisper CUDA) + Kokoro TTS (onnxruntime-gpu) + Pipecat/WebRTC.
+#
+# Near-native GPU performance via the NVIDIA Container Toolkit (`--gpus all`).
+FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3-pip \
+    ffmpeg libsndfile1 espeak-ng ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Deps first for layer caching.
+COPY requirements-base.txt requirements-cuda.txt ./
+RUN python3.11 -m pip install --upgrade pip \
+    && python3.11 -m pip install -r requirements-cuda.txt
+
+# App code (models are NOT baked in — mounted as a volume / fetched at first boot).
+COPY src ./src
+COPY scripts ./scripts
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Volume-backed caches so restarts don't re-download weights.
+ENV PYTHONPATH=/app/src \
+    HOST=0.0.0.0 \
+    PORT=8080 \
+    MODELS_DIR=/app/models \
+    HF_HOME=/app/.cache/huggingface
+VOLUME ["/app/models", "/app/.cache/huggingface"]
+
+EXPOSE 8080
+# WebRTC media needs UDP reachability — run with `--net host` or a mapped UDP
+# range + advertised public IP. See docs/DEPLOYMENT.md.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -fsS http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["python3.11", "-m", "uvicorn", "realtime_ai.server:app", "--host", "0.0.0.0", "--port", "8080"]

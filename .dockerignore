@@ -1,0 +1,11 @@
+.venv/
+**/__pycache__/
+*.pyc
+.git/
+.env
+# Models are mounted as a volume / downloaded at first boot, not baked in.
+models/*.onnx
+models/*.bin
+*.log
+.pytest_cache/
+.vscode/

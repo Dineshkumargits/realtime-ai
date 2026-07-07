@@ -1,0 +1,12 @@
+# Apple-Silicon dev target (Metal / CoreML / CPU). No CUDA.
+-r requirements-base.txt
+
+# STT via MLX (Metal). distil-whisper-large-v3 runs on the GPU.
+mlx-whisper>=0.4.0
+
+# onnxruntime (mac wheel ships CoreML + CPU execution providers)
+onnxruntime>=1.18.0
+
+# LLM: Ollama is an external process (brew install ollama). No python dep here;
+# we talk to its OpenAI-compatible endpoint at http://localhost:11434/v1.
+faster-whisper>=1.0.3

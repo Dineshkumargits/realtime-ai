@@ -1,0 +1,13 @@
+# NVIDIA prod target (CUDA 12+, Blackwell-capable). Install inside the CUDA
+# base image / a machine with the NVIDIA driver present.
+-r requirements-base.txt
+
+# STT via faster-whisper (CTranslate2) with CUDA + int8 quantization.
+faster-whisper>=1.0.3
+
+# GPU onnxruntime (CUDA execution provider) for Kokoro TTS.
+onnxruntime-gpu>=1.18.0
+
+# LLM: vLLM served separately (OpenAI-compatible). Point LLM_BASE_URL at it.
+# Install/run vLLM in its own env/container, e.g.:
+#   vllm serve Qwen/Qwen2.5-7B-Instruct --quantization fp8 --port 8000
