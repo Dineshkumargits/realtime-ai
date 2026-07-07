@@ -37,10 +37,11 @@ class Settings(BaseSettings):
 
     # ---- server ----
     host: str = "0.0.0.0"
-    port: int = 8080
+    # Uncommon default port to avoid clashing with other apps on the host.
+    port: int = 18080
     log_level: str = "INFO"
     # Public base URL the browser reaches this server at (used for ICE / logs).
-    public_base_url: str = "http://localhost:8080"
+    public_base_url: str = "http://localhost:18080"
 
     # ---- backend selection ----
     # "auto" resolves from the platform in resolved_* below.

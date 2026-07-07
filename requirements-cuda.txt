@@ -10,4 +10,4 @@ onnxruntime-gpu>=1.18.0
 
 # LLM: vLLM served separately (OpenAI-compatible). Point LLM_BASE_URL at it.
 # Install/run vLLM in its own env/container, e.g.:
-#   vllm serve Qwen/Qwen2.5-7B-Instruct --quantization fp8 --port 8000
+#   vllm serve Qwen/Qwen2.5-7B-Instruct --quantization fp8 --port 18000

@@ -30,16 +30,17 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # Volume-backed caches so restarts don't re-download weights.
 ENV PYTHONPATH=/app/src \
     HOST=0.0.0.0 \
-    PORT=8080 \
+    PORT=18080 \
     MODELS_DIR=/app/models \
     HF_HOME=/app/.cache/huggingface
 VOLUME ["/app/models", "/app/.cache/huggingface"]
 
-EXPOSE 8080
+EXPOSE 18080
 # WebRTC media needs UDP reachability — run with `--net host` or a mapped UDP
 # range + advertised public IP. See docs/DEPLOYMENT.md.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -fsS http://localhost:8080/health || exit 1
+    CMD curl -fsS "http://localhost:${PORT}/health" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["python3.11", "-m", "uvicorn", "realtime_ai.server:app", "--host", "0.0.0.0", "--port", "8080"]
+# sh -c so ${PORT} is honored (override via env without editing this file).
+CMD ["sh", "-c", "python3.11 -m uvicorn realtime_ai.server:app --host 0.0.0.0 --port ${PORT}"]

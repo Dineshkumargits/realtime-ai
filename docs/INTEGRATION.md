@@ -10,8 +10,8 @@ OpenAI when the var is unset, so this is fully reversible.
 cd realtime-ai
 source .venv/bin/activate
 ollama serve &                 # dev LLM (llama3:latest)
-uvicorn realtime_ai.server:app --host 0.0.0.0 --port 8080
-curl localhost:8080/health
+uvicorn realtime_ai.server:app --host 0.0.0.0 --port 18080
+curl localhost:18080/health
 ```
 
 ## 2. Point the API at it
@@ -19,7 +19,7 @@ curl localhost:8080/health
 `sales-training-api-v2` — set in the API's environment:
 
 ```bash
-REALTIME_BASE_URL=http://localhost:8080     # or your tunnel/GPU host URL
+REALTIME_BASE_URL=http://localhost:18080     # or your tunnel/GPU host URL
 ```
 
 The change is in [session.service.ts](../../NibavLifts/sales-whisper/sales-training-api-v2/src/modules/session/session.service.ts):
@@ -31,7 +31,7 @@ when `REALTIME_BASE_URL` is not `api.openai.com`, the API calls our
 `apps/sales-training` — set a Vite env var (e.g. `.env` / `environments/*`):
 
 ```bash
-VITE_REALTIME_BASE_URL=http://localhost:8080   # same host the browser reaches
+VITE_REALTIME_BASE_URL=http://localhost:18080   # same host the browser reaches
 ```
 
 The change is in [curriculum/index.tsx](../../NibavLifts/nibav-internal-apps/ui/apps/sales-training/src/pages/curriculum/index.tsx):
@@ -51,7 +51,7 @@ is plain HTTP that traverses a Cloudflare tunnel fine.
 Set in the API's environment:
 
 ```bash
-EVAL_BASE_URL=http://localhost:8080     # realtime-ai host (proxies to the LLM)
+EVAL_BASE_URL=http://localhost:18080     # realtime-ai host (proxies to the LLM)
 EVALUATION_MODEL=llama3:latest          # grading model (see note below)
 ```
 

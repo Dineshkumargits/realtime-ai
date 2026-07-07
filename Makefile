@@ -13,7 +13,7 @@ models:
 	$(PY) scripts/download_models.py
 
 run:
-	PYTHONPATH=$(PYTHONPATH) $(PY) -m uvicorn realtime_ai.server:app --host 0.0.0.0 --port 8080 --reload
+	PYTHONPATH=$(PYTHONPATH) $(PY) -m uvicorn realtime_ai.server:app --host 0.0.0.0 --port 18080 --reload
 
 smoke:
 	$(PY) scripts/smoke_test.py

@@ -39,10 +39,10 @@ pip install -r requirements-mac.txt
 python scripts/download_models.py        # Kokoro onnx + voices
 cp .env.example .env
 ollama serve &                           # if not already running
-uvicorn realtime_ai.server:app --host 0.0.0.0 --port 8080
+uvicorn realtime_ai.server:app --host 0.0.0.0 --port 18080
 ```
 
-Then point the client + API at `http://localhost:8080` (see `docs/INTEGRATION.md`).
+Then point the client + API at `http://localhost:18080` (see `docs/INTEGRATION.md`).
 
 ## Prod (NVIDIA)
 

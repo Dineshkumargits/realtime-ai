@@ -33,7 +33,7 @@ Set these env vars (see `.env.example`) and install `requirements-cuda.txt`:
 ```bash
 STT_BACKEND=faster_whisper          # CUDA int8, auto-detected via nvidia-smi
 STT_MODEL_CUDA=distil-whisper/distil-large-v3
-LLM_BASE_URL=http://vllm:8000/v1    # vLLM OpenAI-compatible server
+LLM_BASE_URL=http://vllm:18000/v1   # vLLM OpenAI-compatible server
 LLM_MODEL=Qwen/Qwen2.5-7B-Instruct  # non-thinking instruct model
 TTS_BACKEND=kokoro                  # onnxruntime-gpu picks CUDAExecutionProvider
 ```
@@ -41,7 +41,7 @@ TTS_BACKEND=kokoro                  # onnxruntime-gpu picks CUDAExecutionProvide
 Run vLLM separately (its own container), FP8 for Blackwell:
 
 ```bash
-vllm serve Qwen/Qwen2.5-7B-Instruct --quantization fp8 --port 8000
+vllm serve Qwen/Qwen2.5-7B-Instruct --quantization fp8 --port 18000
 ```
 
 ## Concurrency & scaling (target: 10+ sessions)
@@ -92,7 +92,7 @@ docker run --rm --gpus all nvidia/cuda:12.6.2-base-ubuntu22.04 nvidia-smi   # ve
 
 ```bash
 docker compose -f docker-compose.cuda.yml up -d --build
-curl localhost:8080/health
+curl localhost:18080/health
 ```
 
 Single container (no compose), pointing at an external vLLM:
@@ -101,7 +101,7 @@ Single container (no compose), pointing at an external vLLM:
 docker build -f Dockerfile.cuda -t realtime-ai:cuda .
 docker run --gpus all --net host \
   -v realtime-models:/app/models -v realtime-hf:/app/.cache/huggingface \
-  -e LLM_BASE_URL=http://localhost:8000/v1 --env-file .env realtime-ai:cuda
+  -e LLM_BASE_URL=http://localhost:18000/v1 --env-file .env realtime-ai:cuda
 ```
 
 `--net host` (or an explicit UDP range + advertised public IP) is required so

@@ -13,7 +13,7 @@ Two independent paths reach the server, and **only one** goes through Cloudflare
                  ┌─────────────── Cloudflare Tunnel (HTTPS) ───────────────┐
  Browser ── signaling: /v1/realtime/{client_secrets,calls}, /v1/chat/... ──┤
  (BDM)                                                                       ▼
-                                                          realtime-ai :8080 (HTTP)
+                                                          realtime-ai :18080 (HTTP)
  Browser ═══════════ WebRTC media (RTP over UDP) ═══════════▶ server_public_ip:UDP
                      (does NOT go through Cloudflare)
 ```
@@ -63,7 +63,7 @@ sudo ufw allow 32768:60999/udp
 sudo ufw enable
 ```
 
-HTTP (:8080) stays **closed** to the internet — Cloudflare Tunnel reaches it via
+HTTP (:18080) stays **closed** to the internet — Cloudflare Tunnel reaches it via
 `localhost`. (If you later add TURN, also open 3478/udp+tcp and the relay range.)
 
 ## 3. Get the code onto the server
@@ -95,9 +95,9 @@ First boot downloads model weights into the `models` + `hf-cache` volumes
 ## 6. Smoke test on the server (before Cloudflare)
 
 ```bash
-curl -s http://localhost:8080/health          # {"status":"ok",...}
+curl -s http://localhost:18080/health          # {"status":"ok",...}
 # text LLM path (grading):
-curl -s http://localhost:8080/v1/chat/completions \
+curl -s http://localhost:18080/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{"model":"Qwen/Qwen2.5-7B-Instruct","messages":[{"role":"user","content":"say hi"}]}'
 ```
@@ -123,10 +123,10 @@ You need a domain already added to Cloudflare.
    The connector should show **HEALTHY** in the dashboard.
 4. **Public Hostnames → Add a public hostname**:
    - Subdomain: `realtime` (→ `realtime.yourdomain.com`)
-   - Service: **HTTP** → `localhost:8080`
+   - Service: **HTTP** → `localhost:18080`
    - Save.
 
-> cloudflared runs on the host, so `localhost:8080` reaches the `--net host`
+> cloudflared runs on the host, so `localhost:18080` reaches the `--net host`
 > realtime-ai container. No extra ports opened.
 
 Test: `curl https://realtime.yourdomain.com/health` from anywhere → `ok`.
@@ -193,7 +193,7 @@ see field users who can't connect.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `nvidia-smi` fails in container | toolkit not configured | re-run §1 nvidia-ctk step |
-| `/health` ok but 502 via tunnel | cloudflared can't reach :8080 | service URL must be `localhost:8080`; realtime-ai on `--net host` |
+| `/health` ok but 502 via tunnel | cloudflared can't reach :18080 | service URL must be `localhost:18080`; realtime-ai on `--net host` |
 | Transcript in logs, no audio | UDP media blocked | §10 TURN |
 | Re-downloads models each restart | volumes not persisted | keep the `models`/`hf-cache` named volumes |
 | vLLM OOM | VRAM over-allocated | lower `--gpu-memory-utilization` |

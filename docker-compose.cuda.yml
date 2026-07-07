@@ -7,16 +7,18 @@
 services:
   vllm:
     image: vllm/vllm-openai:latest
+    # Ports are env-overridable: set VLLM_PORT / REALTIME_PORT in a .env next to
+    # this file (or the shell) if even these clash with something on the host.
     command: >
       --model Qwen/Qwen2.5-7B-Instruct
       --quantization fp8
       --gpu-memory-utilization 0.6
       --enable-prefix-caching
-      --port 8000
+      --port ${VLLM_PORT:-18000}
     volumes:
       - hf-cache:/root/.cache/huggingface     # persist LLM weights
     ports:
-      - "8000:8000"
+      - "${VLLM_PORT:-18000}:${VLLM_PORT:-18000}"
     restart: unless-stopped
     deploy:
       resources:
@@ -29,7 +31,8 @@ services:
       dockerfile: Dockerfile.cuda
     network_mode: host          # required for WebRTC UDP media
     environment:
-      - LLM_BASE_URL=http://localhost:8000/v1
+      - PORT=${REALTIME_PORT:-18080}
+      - LLM_BASE_URL=http://localhost:${VLLM_PORT:-18000}/v1
       - LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
       - STT_BACKEND=faster_whisper
       - STT_MODEL_CUDA=distil-whisper/distil-large-v3

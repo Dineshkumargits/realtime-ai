@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import fractions
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,7 +27,7 @@ from aiortc.mediastreams import AudioStreamTrack
 from av import AudioFrame
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = "http://localhost:8080"
+BASE = os.environ.get("REALTIME_BASE", "http://localhost:18080")
 USER_LINE = "Hi, I saw your ad for a home elevator. How much does it cost?"
 INSTRUCTIONS = (
     "You are a friendly potential customer on a phone call with a salesperson. "
