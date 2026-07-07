@@ -38,7 +38,9 @@ VOLUME ["/app/models", "/app/.cache/huggingface"]
 EXPOSE 18080
 # WebRTC media needs UDP reachability — run with `--net host` or a mapped UDP
 # range + advertised public IP. See docs/DEPLOYMENT.md.
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+# start-period covers first-boot model downloads so the container isn't flagged
+# unhealthy while it's still legitimately starting up.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=3 \
     CMD curl -fsS "http://localhost:${PORT}/health" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
