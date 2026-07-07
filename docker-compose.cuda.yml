@@ -40,7 +40,7 @@ services:
       - TTS_BACKEND=kokoro
       - MAX_CONCURRENT_SESSIONS=16
     volumes:
-      - models:/app/models                    # Kokoro onnx + voices
+      # Kokoro is baked into the image; only Whisper/Silero weights are cached here.
       - hf-cache:/app/.cache/huggingface       # faster-whisper + silero weights
     restart: unless-stopped
     depends_on:
@@ -51,5 +51,4 @@ services:
           devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
 
 volumes:
-  models:
   hf-cache:

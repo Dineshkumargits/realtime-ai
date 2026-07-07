@@ -21,19 +21,23 @@ COPY requirements-base.txt requirements-cuda.txt ./
 RUN python3.11 -m pip install --upgrade pip \
     && python3.11 -m pip install -r requirements-cuda.txt
 
-# App code (models are NOT baked in — mounted as a volume / fetched at first boot).
 COPY src ./src
 COPY scripts ./scripts
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Volume-backed caches so restarts don't re-download weights.
+# Bake the small, static Kokoro model into the image (atomic + size-verified) so
+# there is NO runtime download to stall or corrupt startup. The larger Whisper
+# weights still download once into the HF cache volume on first use.
+RUN python3.11 scripts/download_models.py
+
 ENV PYTHONPATH=/app/src \
     HOST=0.0.0.0 \
     PORT=18080 \
     MODELS_DIR=/app/models \
     HF_HOME=/app/.cache/huggingface
-VOLUME ["/app/models", "/app/.cache/huggingface"]
+# Only the HF cache is a volume; Kokoro lives in the image layer (immutable).
+VOLUME ["/app/.cache/huggingface"]
 
 EXPOSE 18080
 # WebRTC media needs UDP reachability — run with `--net host` or a mapped UDP
