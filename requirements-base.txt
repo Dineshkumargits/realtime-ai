@@ -20,3 +20,4 @@ numpy>=1.26.0
 
 # TTS
 kokoro-onnx>=0.4.0
+requests>=2.31.0            # pipecat.services.kokoro.tts imports this directly
