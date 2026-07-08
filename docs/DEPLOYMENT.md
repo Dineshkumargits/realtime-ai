@@ -109,14 +109,27 @@ WebRTC media reaches the container. Bridge networking drops the RTP media.
 
 ### VRAM budget (both services share one GPU)
 
+Measured on a **16GB RTX 5060 Ti**: Qwen2.5-7B fp8 weights alone take ~8.2GB.
+`--gpu-memory-utilization 0.6` (9.6GB) left only 0.07GB for KV cache and vLLM
+refused to start (`KV cache memory ... larger than available`). Fixed by capping
+context length (sales-training prompts don't need 32K tokens) and raising
+utilization so there's real KV cache headroom for concurrent sessions:
+
+```
+--gpu-memory-utilization 0.80   # 12.8GB of 16GB for vLLM
+--max-model-len 8192            # shrinks KV cache needed per session
+```
+
 | Component | Model | ~VRAM |
 |-----------|-------|-------|
-| vLLM | Qwen2.5-7B-Instruct FP8 | ~8–10 GB (capped via `--gpu-memory-utilization 0.6`) |
+| vLLM | Qwen2.5-7B-Instruct FP8 (weights + KV cache) | ~12.8 GB (`--gpu-memory-utilization 0.80` on a 16GB card) |
 | STT | faster-whisper distil-large-v3 int8 | ~1.5–2 GB |
 | TTS | Kokoro-82M ONNX | <1 GB |
 
-Fits comfortably on a 24 GB card. On smaller cards lower vLLM's utilization or
-use a smaller LLM. For heavy concurrency, give vLLM its own GPU.
+Leaves ~3.2GB for STT+TTS on a 16GB card — tight but workable for a handful of
+concurrent sessions. On a 24GB+ card, raise `--max-model-len` back toward 32768
+and/or lower utilization slightly for more headroom. For heavy concurrency
+(10+), give vLLM its own GPU rather than sharing with STT/TTS.
 
 ### First boot
 

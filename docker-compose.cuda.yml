@@ -4,6 +4,14 @@
 # WebRTC media needs UDP reachability -> network_mode: host (Linux, public IP).
 # Both services share the GPU, so vLLM's VRAM is capped to leave room for
 # faster-whisper + Kokoro (tune to your card).
+#
+# VRAM tuning (measured on a 16GB RTX 5060 Ti): Qwen2.5-7B fp8 weights alone
+# take ~8.2GB. --gpu-memory-utilization 0.6 (9.6GB) left only 0.07GB for KV
+# cache -> engine failed to start ("KV cache memory ... larger than available").
+# --max-model-len caps context so KV cache/session is small (sales-training
+# prompts don't need 32K tokens), and --gpu-memory-utilization is raised so
+# there's real KV cache headroom for concurrent sessions. Adjust both to your
+# card: bigger card -> can raise utilization and/or max-model-len further.
 services:
   vllm:
     image: vllm/vllm-openai:latest
@@ -12,7 +20,8 @@ services:
     command: >
       --model Qwen/Qwen2.5-7B-Instruct
       --quantization fp8
-      --gpu-memory-utilization 0.6
+      --gpu-memory-utilization 0.80
+      --max-model-len 8192
       --enable-prefix-caching
       --port ${VLLM_PORT:-18000}
     volumes:
