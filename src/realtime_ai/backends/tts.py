@@ -10,12 +10,22 @@ keys fall back to the configured default.
 
 from __future__ import annotations
 
+import threading
+
 from loguru import logger
 
 from pipecat.services.kokoro.tts import KokoroTTSService, KokoroTTSSettings
 from pipecat.transcriptions.language import Language
 
 from realtime_ai.config import Settings
+
+# Process-wide cache for the loaded Kokoro ONNX engine. KokoroTTSService.run_tts
+# reads the voice per-call (self._settings.voice), so the underlying engine is
+# voice-agnostic and safe to share across sessions -- without this, every
+# session would reload the ONNX model onto the GPU from scratch and never free
+# the previous copy promptly, compounding the same VRAM exhaustion as STT.
+_engine_cache: dict[tuple[str, str], object] = {}
+_engine_cache_lock = threading.Lock()
 
 # OpenAI realtime voice key -> Kokoro voice. Tweak to taste.
 OPENAI_TO_KOKORO_VOICE: dict[str, str] = {
@@ -41,7 +51,34 @@ def resolve_voice(requested: str | None, default: str) -> str:
     return OPENAI_TO_KOKORO_VOICE.get(requested.lower(), default)
 
 
+def _cached_kokoro_engine(model_path: str, voices_path: str):
+    """Drop-in replacement for kokoro_onnx.Kokoro that reuses one process-wide
+    engine per (model_path, voices_path) instead of reloading the ONNX model
+    onto the GPU on every call.
+    """
+    key = (model_path, voices_path)
+    with _engine_cache_lock:
+        engine = _engine_cache.get(key)
+        if engine is None:
+            from kokoro_onnx import Kokoro as _RealKokoro
+
+            logger.info(f"Loading Kokoro TTS engine from {model_path} (cached for reuse)")
+            engine = _RealKokoro(model_path, voices_path)
+            _engine_cache[key] = engine
+        return engine
+
+
+def _patch_kokoro_caching() -> None:
+    import pipecat.services.kokoro.tts as kokoro_tts_module
+
+    if getattr(kokoro_tts_module, "_realtime_ai_patched", False):
+        return
+    kokoro_tts_module.Kokoro = _cached_kokoro_engine  # type: ignore[assignment]
+    kokoro_tts_module._realtime_ai_patched = True  # type: ignore[attr-defined]
+
+
 def create_tts(settings: Settings, voice: str | None = None) -> KokoroTTSService:
+    _patch_kokoro_caching()
     kokoro_voice = resolve_voice(voice, settings.tts_default_voice)
     logger.info(f"TTS backend: kokoro voice={kokoro_voice} (requested={voice})")
     return KokoroTTSService(
