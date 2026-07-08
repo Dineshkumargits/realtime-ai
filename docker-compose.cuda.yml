@@ -44,7 +44,7 @@ services:
       - LLM_BASE_URL=http://localhost:${VLLM_PORT:-18000}/v1
       - LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
       - STT_BACKEND=faster_whisper
-      - STT_MODEL_CUDA=distil-whisper/distil-large-v3
+      - STT_MODEL_CUDA=Systran/faster-distil-whisper-large-v3
       - STT_COMPUTE_TYPE=int8
       - TTS_BACKEND=kokoro
       - MAX_CONCURRENT_SESSIONS=16

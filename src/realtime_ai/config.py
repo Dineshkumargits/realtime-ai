@@ -15,7 +15,6 @@ import platform
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,7 +51,9 @@ class Settings(BaseSettings):
     # ---- STT ----
     # mlx model repo (mac) or faster-whisper model name (cuda/cpu)
     stt_model_mac: str = "mlx-community/distil-whisper-large-v3"
-    stt_model_cuda: str = "distil-whisper/distil-large-v3"
+    # Must be a CTranslate2-converted repo (faster-whisper needs model.bin, not
+    # the raw HF/PyTorch checkpoint that "distil-whisper/distil-large-v3" is).
+    stt_model_cuda: str = "Systran/faster-distil-whisper-large-v3"
     stt_compute_type: str = "int8"  # faster-whisper only
     stt_language: str = "en"
 

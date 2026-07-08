@@ -32,7 +32,7 @@ Set these env vars (see `.env.example`) and install `requirements-cuda.txt`:
 
 ```bash
 STT_BACKEND=faster_whisper          # CUDA int8, auto-detected via nvidia-smi
-STT_MODEL_CUDA=distil-whisper/distil-large-v3
+STT_MODEL_CUDA=Systran/faster-distil-whisper-large-v3
 LLM_BASE_URL=http://vllm:18000/v1   # vLLM OpenAI-compatible server
 LLM_MODEL=Qwen/Qwen2.5-7B-Instruct  # non-thinking instruct model
 TTS_BACKEND=kokoro                  # onnxruntime-gpu picks CUDAExecutionProvider
