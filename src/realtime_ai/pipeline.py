@@ -15,9 +15,13 @@ import asyncio
 
 from loguru import logger
 
+import time
+
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.frames.frames import Frame, InputAudioRawFrame
 from pipecat.pipeline.pipeline import Pipeline
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.pipeline.runner import WorkerRunner
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -39,6 +43,36 @@ from realtime_ai.session_manager import SessionConfig
 # resamples the mic to whatever we set here regardless of the client's declared
 # PCM rate. Output stays at Kokoro's native rate.
 VAD_STT_INPUT_RATE = 16000
+
+
+class _AudioProbe(FrameProcessor):
+    """Diagnostic pass-through: logs whether mic audio is actually reaching the
+    pipeline from the browser. Confirms/rules out media-path issues (NAT/TURN,
+    muted mic, silent track) independent of STT/VAD behavior. Cheap -- one log
+    line every ~2s, not per-frame.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._frames = 0
+        self._bytes = 0
+        self._last_log = time.monotonic()
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, InputAudioRawFrame):
+            self._frames += 1
+            self._bytes += len(frame.audio)
+            now = time.monotonic()
+            if now - self._last_log >= 2.0:
+                logger.info(
+                    f"AudioProbe: {self._frames} frames / {self._bytes} bytes "
+                    f"from browser in last {now - self._last_log:.1f}s"
+                )
+                self._frames = 0
+                self._bytes = 0
+                self._last_log = now
+        await self.push_frame(frame, direction)
 
 
 def _vad_analyzer(settings: Settings) -> SileroVADAnalyzer:
@@ -87,6 +121,7 @@ async def run_session(
     pipeline = Pipeline(
         [
             transport.input(),
+            _AudioProbe(),
             stt,
             user_aggregator,
             llm,
