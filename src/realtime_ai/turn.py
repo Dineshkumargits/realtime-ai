@@ -50,6 +50,9 @@ async def fetch_turn_ice_servers(settings: Settings) -> list[dict]:
         # Cloudflare returns either one dict or a list; normalize to a list.
         servers = ice_servers if isinstance(ice_servers, list) else [ice_servers]
         logger.info(f"Minted Cloudflare TURN credentials (ttl={settings.cf_turn_ttl_seconds}s)")
+        for entry in servers:
+            masked = {**entry, "credential": "***" if entry.get("credential") else None}
+            logger.info(f"TURN ice server entry: {masked}")
         return servers + stun_only
     except Exception as exc:
         logger.error(f"Cloudflare TURN credential mint failed, falling back to STUN-only: {exc}")
