@@ -26,10 +26,13 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 
+import asyncio
+
 from realtime_ai.config import Settings, get_settings
 from realtime_ai.openai_events import OaiEventsChannel
 from realtime_ai.pipeline import spawn_session
 from realtime_ai.session_manager import SessionConfig, SessionManager
+from realtime_ai.turn import fetch_turn_ice_servers
 
 
 class AppState:
@@ -37,9 +40,49 @@ class AppState:
     sessions: SessionManager
     webrtc: SmallWebRTCRequestHandler
     active: int = 0
+    # Raw RTCIceServer-shaped dicts, exposed to the browser via
+    # /v1/realtime/client_secrets so its RTCPeerConnection uses the same
+    # TURN relay as our own server-side aiortc peer connection.
+    ice_servers: list[dict] = []
 
 
 state = AppState()
+
+
+def _build_webrtc_handler(ice_servers: list[dict]) -> SmallWebRTCRequestHandler:
+    return SmallWebRTCRequestHandler(
+        ice_servers=[
+            IceServer(
+                urls=s["urls"],
+                username=s.get("username"),
+                credential=s.get("credential"),
+            )
+            for s in ice_servers
+        ],
+        connection_mode=ConnectionMode.MULTIPLE,
+    )
+
+
+async def _refresh_turn_loop(s: Settings) -> None:
+    """Re-mint Cloudflare TURN credentials before they expire.
+
+    Swaps in a fresh SmallWebRTCRequestHandler; existing connections only
+    consult ice_servers during initial ICE gathering, so this is safe to do
+    without disrupting sessions already connected.
+    """
+    if not s.turn_enabled:
+        return
+    # Refresh at 80% of TTL, floored at 60s so misconfigured tiny TTLs don't spin.
+    interval = max(60, int(s.cf_turn_ttl_seconds * 0.8))
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            servers = await fetch_turn_ice_servers(s)
+            state.ice_servers = servers
+            state.webrtc = _build_webrtc_handler(servers)
+            logger.info("Refreshed Cloudflare TURN credentials")
+        except Exception as exc:
+            logger.error(f"TURN credential refresh failed, keeping existing: {exc}")
 
 
 @asynccontextmanager
@@ -47,15 +90,16 @@ async def lifespan(app: FastAPI):
     s = get_settings()
     state.settings = s
     state.sessions = SessionManager(token_ttl_s=s.ephemeral_token_ttl_s)
-    state.webrtc = SmallWebRTCRequestHandler(
-        ice_servers=[IceServer(urls=s.stun_server)],
-        connection_mode=ConnectionMode.MULTIPLE,
-    )
+    state.ice_servers = await fetch_turn_ice_servers(s)
+    state.webrtc = _build_webrtc_handler(state.ice_servers)
+    refresh_task = asyncio.create_task(_refresh_turn_loop(s))
     logger.info(
         f"realtime-ai up | STT={s.resolved_stt_backend} LLM={s.resolved_llm_backend}"
         f"({s.llm_model}) TTS={s.resolved_tts_backend} | mac={s.is_mac} cuda={s.has_cuda}"
+        f" | turn={'on' if s.turn_enabled else 'off'}"
     )
     yield
+    refresh_task.cancel()
     await state.webrtc.close()
 
 
@@ -97,6 +141,11 @@ async def client_secrets(payload: dict) -> dict:
             "expires_at": int(time.time()) + state.settings.ephemeral_token_ttl_s,
         },
         "session": session,
+        # Not part of OpenAI's schema -- our client reads this to build a
+        # matching iceServers list so it uses the same TURN relay (if any) as
+        # our server-side aiortc connection. Real OpenAI clients ignore
+        # unknown fields, so this stays backward compatible.
+        "ice_servers": state.ice_servers,
     }
 
 

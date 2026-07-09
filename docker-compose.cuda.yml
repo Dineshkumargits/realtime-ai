@@ -58,6 +58,13 @@ services:
       - STT_COMPUTE_TYPE=int8
       - TTS_BACKEND=kokoro
       - MAX_CONCURRENT_SESSIONS=16
+      # TURN (Cloudflare) -- needed since this server is behind a home/office
+      # router NAT, not a directly-routable public IP. Set these two in a
+      # .env file next to this compose file (see .env.example); left blank
+      # here falls back to STUN-only automatically.
+      - CF_TURN_KEY_ID=${CF_TURN_KEY_ID:-}
+      - CF_TURN_API_TOKEN=${CF_TURN_API_TOKEN:-}
+      - CF_TURN_TTL_SECONDS=${CF_TURN_TTL_SECONDS:-86400}
     volumes:
       # Kokoro is baked into the image; only Whisper/Silero weights are cached here.
       - hf-cache:/app/.cache/huggingface       # faster-whisper + silero weights

@@ -87,6 +87,21 @@ class Settings(BaseSettings):
     audio_out_sample_rate: int = 24000
     stun_server: str = "stun:stun.l.google.com:19302"
 
+    # ---- TURN (Cloudflare) ----
+    # Needed when this server sits behind NAT (no directly-routable public IP):
+    # STUN alone lets peers discover a public IP, but inbound UDP still can't
+    # reach a NAT'd box without port-forwarding, which isn't practical against
+    # aiortc's per-session ephemeral ports. TURN relays media through a public
+    # relay instead. Optional -- unset means STUN-only (today's behavior).
+    # Create a TURN app at Cloudflare dashboard -> Realtime -> TURN.
+    cf_turn_key_id: str = ""
+    cf_turn_api_token: str = ""
+    cf_turn_ttl_seconds: int = 86400  # 24h; refreshed periodically while the server runs
+
+    @property
+    def turn_enabled(self) -> bool:
+        return bool(self.cf_turn_key_id and self.cf_turn_api_token)
+
     # ---- VAD (Silero) turn detection; mirrors the OpenAI server_vad knobs ----
     vad_threshold: float = 0.7
     vad_prefix_padding_ms: int = 300
