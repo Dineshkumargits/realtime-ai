@@ -9,9 +9,19 @@
 # take ~8.2GB. --gpu-memory-utilization 0.6 (9.6GB) left only 0.07GB for KV
 # cache -> engine failed to start ("KV cache memory ... larger than available").
 # --max-model-len caps context so KV cache/session is small (sales-training
-# prompts don't need 32K tokens), and --gpu-memory-utilization is raised so
-# there's real KV cache headroom for concurrent sessions. Adjust both to your
-# card: bigger card -> can raise utilization and/or max-model-len further.
+# prompts don't need 32K tokens).
+#
+# 0.80 was too aggressive in practice: vLLM pre-allocates its KV cache pool
+# up front, and at 0.80 it held ~12.9GB, leaving ~100MB free on the card for
+# the whole rest of the process -> faster-whisper's CUDA alloc failed with
+# "CUDA failed with error out of memory" as soon as a session started.
+# 0.55 overcorrected the other way: model weights (8.2GB) + CUDA graph
+# overhead (0.33GB) alone exceed that budget, so the engine failed to start
+# with "No available memory for the cache blocks" (KV cache went negative).
+# 0.68 (~10.8GB) covers weights+cudagraph with ~2.3GB left for real KV cache,
+# while still leaving ~5GB free on the card for faster-whisper + Kokoro.
+# Adjust both to your card: bigger card -> can raise utilization and/or
+# max-model-len further.
 services:
   vllm:
     image: vllm/vllm-openai:latest
@@ -20,7 +30,7 @@ services:
     command: >
       --model Qwen/Qwen2.5-7B-Instruct
       --quantization fp8
-      --gpu-memory-utilization 0.80
+      --gpu-memory-utilization 0.68
       --max-model-len 8192
       --enable-prefix-caching
       --port ${VLLM_PORT:-18000}
