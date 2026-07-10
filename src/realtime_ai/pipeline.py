@@ -11,6 +11,7 @@ truncates the assistant turn automatically.
 
 from __future__ import annotations
 
+import array
 import asyncio
 
 from loguru import logger
@@ -56,6 +57,7 @@ class _AudioProbe(FrameProcessor):
         super().__init__()
         self._frames = 0
         self._bytes = 0
+        self._peak = 0
         self._last_log = time.monotonic()
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -63,14 +65,25 @@ class _AudioProbe(FrameProcessor):
         if isinstance(frame, InputAudioRawFrame):
             self._frames += 1
             self._bytes += len(frame.audio)
+            # int16 PCM peak amplitude -- distinguishes real speech from
+            # silence/near-silence arriving over a working media path (e.g. a
+            # muted/wrong input device, or gain lost across a TURN relay).
+            samples = array.array("h")
+            samples.frombytes(
+                frame.audio[: len(frame.audio) - (len(frame.audio) % 2)]
+            )
+            if samples:
+                self._peak = max(self._peak, max(abs(s) for s in samples))
             now = time.monotonic()
             if now - self._last_log >= 2.0:
                 logger.info(
-                    f"AudioProbe: {self._frames} frames / {self._bytes} bytes "
-                    f"from browser in last {now - self._last_log:.1f}s"
+                    f"AudioProbe: {self._frames} frames / {self._bytes} bytes / "
+                    f"peak={self._peak} (of 32767) from browser in last "
+                    f"{now - self._last_log:.1f}s"
                 )
                 self._frames = 0
                 self._bytes = 0
+                self._peak = 0
                 self._last_log = now
         await self.push_frame(frame, direction)
 
