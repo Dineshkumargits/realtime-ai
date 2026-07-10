@@ -85,10 +85,31 @@ async def _refresh_turn_loop(s: Settings) -> None:
             logger.error(f"TURN credential refresh failed, keeping existing: {exc}")
 
 
+def _enable_ice_debug_logging() -> None:
+    """Surface aioice/aiortc stdlib logs (TURN allocation, candidate checks).
+
+    These libraries log through stdlib `logging`, which has no handler in this
+    process (we use loguru) -- so TURN failures were being silently dropped.
+    Routes their records into loguru at DEBUG so `docker logs` shows them.
+    """
+    import logging
+
+    class _LoguruHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            logger.opt(depth=6).log("DEBUG", f"[{record.name}] {record.getMessage()}")
+
+    for name in ("aioice", "aiortc"):
+        lib_logger = logging.getLogger(name)
+        lib_logger.setLevel(logging.DEBUG)
+        lib_logger.addHandler(_LoguruHandler())
+        lib_logger.propagate = False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
     state.settings = s
+    _enable_ice_debug_logging()
     state.sessions = SessionManager(token_ttl_s=s.ephemeral_token_ttl_s)
     state.ice_servers = await fetch_turn_ice_servers(s)
     state.webrtc = _build_webrtc_handler(state.ice_servers)
@@ -210,6 +231,8 @@ async def realtime_calls(
     if "v=0" not in offer_sdp:
         raise HTTPException(status_code=400, detail="Body must be an SDP offer")
 
+    _log_sdp_candidates("offer(browser)", offer_sdp)
+
     events_channel = OaiEventsChannel()
 
     async def on_connection(connection: SmallWebRTCConnection) -> None:
@@ -236,4 +259,20 @@ async def realtime_calls(
     if not answer:
         raise HTTPException(status_code=500, detail="Failed to produce SDP answer")
 
+    _log_sdp_candidates("answer(server)", answer["sdp"])
+
     return Response(content=answer["sdp"], media_type="application/sdp")
+
+
+def _log_sdp_candidates(label: str, sdp: str) -> None:
+    """Log the ICE candidates in an SDP, summarized by type.
+
+    The decisive TURN diagnostic: if the server's answer has no `typ relay`
+    candidate, aiortc never got a Cloudflare TURN allocation, and a NAT'd
+    server cannot be reached no matter what the browser offers.
+    """
+    candidates = [line.strip() for line in sdp.splitlines() if line.startswith("a=candidate")]
+    types = [c.split(" typ ")[1].split(" ")[0] for c in candidates if " typ " in c]
+    logger.info(f"SDP {label}: {len(candidates)} candidates, types={types}")
+    for c in candidates:
+        logger.info(f"SDP {label} candidate: {c}")
