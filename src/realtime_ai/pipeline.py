@@ -76,7 +76,7 @@ class _AudioProbe(FrameProcessor):
                 self._peak = max(self._peak, max(abs(s) for s in samples))
             now = time.monotonic()
             if now - self._last_log >= 2.0:
-                logger.info(
+                logger.debug(
                     f"AudioProbe: {self._frames} frames / {self._bytes} bytes / "
                     f"peak={self._peak} (of 32767) from browser in last "
                     f"{now - self._last_log:.1f}s"
@@ -88,13 +88,29 @@ class _AudioProbe(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-def _vad_analyzer(settings: Settings) -> SileroVADAnalyzer:
+def _vad_analyzer(settings: Settings, config: SessionConfig) -> SileroVADAnalyzer:
+    """Client-requested turn_detection (session.audio.input.turn_detection)
+    overrides the server's own VAD_* defaults when present -- e.g. a client
+    asking for a longer silence_duration_ms to avoid cutting a speaker off on
+    a mid-sentence pause.
+    """
+    threshold = config.vad_threshold if config.vad_threshold is not None else settings.vad_threshold
+    prefix_padding_ms = (
+        config.vad_prefix_padding_ms
+        if config.vad_prefix_padding_ms is not None
+        else settings.vad_prefix_padding_ms
+    )
+    silence_duration_ms = (
+        config.vad_silence_duration_ms
+        if config.vad_silence_duration_ms is not None
+        else settings.vad_silence_duration_ms
+    )
     return SileroVADAnalyzer(
         sample_rate=VAD_STT_INPUT_RATE,
         params=VADParams(
-            confidence=settings.vad_threshold,
-            start_secs=settings.vad_prefix_padding_ms / 1000.0,
-            stop_secs=settings.vad_silence_duration_ms / 1000.0,
+            confidence=threshold,
+            start_secs=prefix_padding_ms / 1000.0,
+            stop_secs=silence_duration_ms / 1000.0,
         ),
     )
 
@@ -128,7 +144,7 @@ async def run_session(
     )
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=_vad_analyzer(settings)),
+        user_params=LLMUserAggregatorParams(vad_analyzer=_vad_analyzer(settings, config)),
     )
 
     pipeline = Pipeline(

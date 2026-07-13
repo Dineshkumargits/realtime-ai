@@ -27,6 +27,8 @@ from pipecat.frames.frames import (
 from pipecat.metrics.metrics import LLMUsageMetricsData
 from pipecat.observers.base_observer import BaseObserver, FramePushed
 
+from realtime_ai.backends.text_filters import strip_think_tags
+
 
 def _event_id() -> str:
     return f"event_{uuid.uuid4().hex[:24]}"
@@ -146,8 +148,10 @@ class OaiEventObserver(BaseObserver):
 
         if isinstance(frame, TranscriptionFrame):
             if self._once(frame.id) and frame.text and frame.text.strip():
+                text = frame.text.strip()
+                logger.info(f"User said: {text!r}")
                 self._channel.send_event(
-                    make_transcription_completed(frame.text.strip(), f"item_{frame.id}")
+                    make_transcription_completed(text, f"item_{frame.id}")
                 )
 
         elif isinstance(frame, LLMFullResponseStartFrame):
@@ -160,9 +164,10 @@ class OaiEventObserver(BaseObserver):
 
         elif isinstance(frame, LLMFullResponseEndFrame):
             if self._once(frame.id):
-                text = "".join(self._assistant_buf).strip()
+                text = strip_think_tags("".join(self._assistant_buf))
                 self._assistant_buf.clear()
                 if text:
+                    logger.info(f"AI replied: {text!r}")
                     self._channel.send_event(make_response_done(text, self._last_usage))
                 self._last_usage = None
 

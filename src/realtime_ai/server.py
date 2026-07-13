@@ -10,6 +10,7 @@ Plus GET /health for probes.
 
 from __future__ import annotations
 
+import sys
 import time
 from contextlib import asynccontextmanager
 
@@ -85,12 +86,15 @@ async def _refresh_turn_loop(s: Settings) -> None:
             logger.error(f"TURN credential refresh failed, keeping existing: {exc}")
 
 
-def _enable_ice_debug_logging() -> None:
-    """Surface aioice/aiortc stdlib logs (TURN allocation, candidate checks).
+def _enable_ice_debug_logging(settings: Settings) -> None:
+    """Surface aioice/aiortc stdlib logs (TURN allocation, candidate checks)
+    -- but only at LOG_LEVEL=DEBUG.
 
     These libraries log through stdlib `logging`, which has no handler in this
     process (we use loguru) -- so TURN failures were being silently dropped.
-    Routes their records into loguru at DEBUG so `docker logs` shows them.
+    At DEBUG, aiortc logs a line per RTP/SCTP packet (dozens/sec), which
+    drowns out everything else; only worth it when actively diagnosing a
+    TURN/media-path issue, not by default.
     """
     import logging
 
@@ -98,18 +102,24 @@ def _enable_ice_debug_logging() -> None:
         def emit(self, record: logging.LogRecord) -> None:
             logger.opt(depth=6).log("DEBUG", f"[{record.name}] {record.getMessage()}")
 
+    debug = settings.log_level.upper() == "DEBUG"
     for name in ("aioice", "aiortc"):
         lib_logger = logging.getLogger(name)
-        lib_logger.setLevel(logging.DEBUG)
-        lib_logger.addHandler(_LoguruHandler())
-        lib_logger.propagate = False
+        if debug:
+            lib_logger.setLevel(logging.DEBUG)
+            lib_logger.addHandler(_LoguruHandler())
+            lib_logger.propagate = False
+        else:
+            lib_logger.setLevel(logging.WARNING)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
     state.settings = s
-    _enable_ice_debug_logging()
+    logger.remove()
+    logger.add(sys.stderr, level=s.log_level.upper())
+    _enable_ice_debug_logging(s)
     state.sessions = SessionManager(token_ttl_s=s.ephemeral_token_ttl_s)
     state.ice_servers = await fetch_turn_ice_servers(s)
     state.webrtc = _build_webrtc_handler(state.ice_servers)

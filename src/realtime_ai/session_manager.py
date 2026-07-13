@@ -28,6 +28,9 @@ class SessionConfig:
     model: str = "gpt-realtime-2"
     input_sample_rate: int = 24000
     output_sample_rate: int = 24000
+    vad_threshold: float | None = None
+    vad_prefix_padding_ms: int | None = None
+    vad_silence_duration_ms: int | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -37,12 +40,16 @@ class SessionConfig:
         inp = audio.get("input", {}) or {}
         in_rate = ((inp.get("format") or {}).get("rate")) or 24000
         out_rate = ((out.get("format") or {}).get("rate")) or 24000
+        turn_detection = inp.get("turn_detection") or {}
         return cls(
             instructions=session.get("instructions", "") or "",
             voice=out.get("voice"),
             model=session.get("model", "gpt-realtime-2"),
             input_sample_rate=int(in_rate),
             output_sample_rate=int(out_rate),
+            vad_threshold=turn_detection.get("threshold"),
+            vad_prefix_padding_ms=turn_detection.get("prefix_padding_ms"),
+            vad_silence_duration_ms=turn_detection.get("silence_duration_ms"),
             raw=session,
         )
 

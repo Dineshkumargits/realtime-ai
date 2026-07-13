@@ -3,35 +3,16 @@
 #
 # WebRTC media needs UDP reachability -> network_mode: host (Linux, public IP).
 # Both services share the GPU, so vLLM's VRAM is capped to leave room for
-# faster-whisper + Kokoro (tune to your card).
-#
-# VRAM tuning (measured on a 16GB RTX 5060 Ti): Qwen2.5-7B fp8 weights alone
-# take ~8.2GB. --gpu-memory-utilization 0.6 (9.6GB) left only 0.07GB for KV
-# cache -> engine failed to start ("KV cache memory ... larger than available").
-# --max-model-len caps context so KV cache/session is small (sales-training
-# prompts don't need 32K tokens).
-#
-# 0.80 was too aggressive in practice: vLLM pre-allocates its KV cache pool
-# up front, and at 0.80 it held ~12.9GB, leaving ~100MB free on the card for
-# the whole rest of the process -> faster-whisper's CUDA alloc failed with
-# "CUDA failed with error out of memory" as soon as a session started.
-# 0.55 overcorrected the other way: model weights (8.2GB) + CUDA graph
-# overhead (0.33GB) alone exceed that budget, so the engine failed to start
-# with "No available memory for the cache blocks" (KV cache went negative).
-# 0.68 (~10.8GB) covers weights+cudagraph with ~2.3GB left for real KV cache,
-# while still leaving ~5GB free on the card for faster-whisper + Kokoro.
-# Adjust both to your card: bigger card -> can raise utilization and/or
-# max-model-len further.
+# faster-whisper + Kokoro.
 services:
   vllm:
     image: vllm/vllm-openai:latest
-    # Ports are env-overridable: set VLLM_PORT / REALTIME_PORT in a .env next to
-    # this file (or the shell) if even these clash with something on the host.
     command: >
-      --model Qwen/Qwen2.5-7B-Instruct
-      --quantization fp8
-      --gpu-memory-utilization 0.68
-      --max-model-len 8192
+      --model Qwen/Qwen3-8B-AWQ
+      --gpu-memory-utilization 0.60
+      --max-model-len 16384
+      --kv-cache-dtype fp8
+      --max-cudagraph-capture-size 16
       --enable-prefix-caching
       --port ${VLLM_PORT:-18000}
     volumes:
@@ -52,21 +33,19 @@ services:
     environment:
       - PORT=${REALTIME_PORT:-18080}
       - LLM_BASE_URL=http://localhost:${VLLM_PORT:-18000}/v1
-      - LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+      - LLM_MODEL=Qwen/Qwen3-8B-AWQ
+      - "LLM_SYSTEM_PREFIX=/no_think "
+      - LLM_TEMPERATURE=0.3
+      - LLM_MAX_TOKENS=150
       - STT_BACKEND=faster_whisper
       - STT_MODEL_CUDA=Systran/faster-distil-whisper-large-v3
       - STT_COMPUTE_TYPE=int8
       - TTS_BACKEND=kokoro
       - MAX_CONCURRENT_SESSIONS=16
-      # TURN (Cloudflare) -- needed since this server is behind a home/office
-      # router NAT, not a directly-routable public IP. Set these two in a
-      # .env file next to this compose file (see .env.example); left blank
-      # here falls back to STUN-only automatically.
       - CF_TURN_KEY_ID=${CF_TURN_KEY_ID:-}
       - CF_TURN_API_TOKEN=${CF_TURN_API_TOKEN:-}
       - CF_TURN_TTL_SECONDS=${CF_TURN_TTL_SECONDS:-86400}
     volumes:
-      # Kokoro is baked into the image; only Whisper/Silero weights are cached here.
       - hf-cache:/app/.cache/huggingface       # faster-whisper + silero weights
     restart: unless-stopped
     depends_on:

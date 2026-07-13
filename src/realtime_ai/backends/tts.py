@@ -16,7 +16,9 @@ from loguru import logger
 
 from pipecat.services.kokoro.tts import KokoroTTSService, KokoroTTSSettings
 from pipecat.transcriptions.language import Language
+from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 
+from realtime_ai.backends.text_filters import StageDirectionTextFilter
 from realtime_ai.config import Settings
 
 # Process-wide cache for the loaded Kokoro ONNX engine. KokoroTTSService.run_tts
@@ -86,4 +88,5 @@ def create_tts(settings: Settings, voice: str | None = None) -> KokoroTTSService
         voices_path=settings.tts_voices_path,
         sample_rate=settings.tts_sample_rate,
         settings=KokoroTTSSettings(voice=kokoro_voice, language=Language.EN),
+        text_filters=[MarkdownTextFilter(), StageDirectionTextFilter()],
     )
